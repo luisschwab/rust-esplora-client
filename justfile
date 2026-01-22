@@ -27,7 +27,7 @@ fmt:
 
 # Run all tests on the workspace with all features
 test:
-   cargo test --all-features -- --test-threads=1
+   cargo test --all-features -- --test-threads=4
 
 # Run pre-push suite: format, check, and test
 pre-push: fmt check test
