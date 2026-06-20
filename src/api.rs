@@ -118,8 +118,8 @@ pub struct BlockStatus {
 pub struct EsploraTx {
     /// The [`Txid`] of the [`Transaction`].
     pub txid: Txid,
-    /// The version number of the [`Transaction`].
-    pub version: i32,
+    /// The version of the [`Transaction`].
+    pub version: transaction::Version,
     /// The locktime of the [`Transaction`].
     /// Sets a time or height after which the [`Transaction`] can be mined.
     pub locktime: u32,
@@ -400,7 +400,7 @@ impl EsploraTx {
     /// and reconstructs the [`Transaction`] from its inputs and outputs.
     pub fn to_tx(&self) -> Transaction {
         Transaction {
-            version: transaction::Version::non_standard(self.version),
+            version: self.version,
             lock_time: bitcoin::absolute::LockTime::from_consensus(self.locktime),
             input: self
                 .vin
