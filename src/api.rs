@@ -35,9 +35,9 @@ pub struct Vin {
     pub prevout: Option<Vout>,
     /// The [`Script`] that unlocks this input.
     pub scriptsig: ScriptBuf,
-    /// The Witness that unlocks this input.
-    #[serde(deserialize_with = "deserialize_witness", default)]
-    pub witness: Vec<Vec<u8>>,
+    /// The [`Witness`] that unlocks this input.
+    #[serde(default)]
+    pub witness: Witness,
     /// The sequence value for this input.
     pub sequence: u32,
     /// Whether this is a coinbase input.
@@ -412,7 +412,7 @@ impl EsploraTx {
                     },
                     script_sig: vin.scriptsig,
                     sequence: bitcoin::Sequence(vin.sequence),
-                    witness: Witness::from_slice(&vin.witness),
+                    witness: vin.witness,
                 })
                 .collect(),
             output: self
