@@ -31,6 +31,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::str::FromStr;
 use std::thread;
+use std::time::Duration;
 
 use bitcoin::consensus::encode::serialize_hex;
 use bitreq::{Method, Proxy, Request, Response};
@@ -42,9 +43,9 @@ use bitcoin::hex::{DisplayHex, FromHex};
 use bitcoin::{Address, Amount, Block, BlockHash, FeeRate, MerkleBlock, Script, Transaction, Txid};
 
 use crate::{
-    is_retryable, is_success, sat_per_vbyte_to_feerate, AddressStats, BlockInfo, BlockStatus,
-    Builder, Error, EsploraTx, MempoolRecentTx, MempoolStats, MerkleProof, OutputStatus,
-    ScriptHashStats, SubmitPackageResult, TxStatus, Utxo, BASE_BACKOFF_MILLIS,
+    duration_to_timeout_secs, is_retryable, is_success, sat_per_vbyte_to_feerate, AddressStats,
+    BlockInfo, BlockStatus, Builder, Error, EsploraTx, MempoolRecentTx, MempoolStats, MerkleProof,
+    OutputStatus, ScriptHashStats, SubmitPackageResult, TxStatus, Utxo, BASE_BACKOFF_MILLIS,
 };
 
 #[allow(deprecated)]
@@ -74,8 +75,8 @@ pub struct BlockingClient {
     ///
     /// NOTE: The proxy is ignored when targeting `wasm32`.
     pub proxy: Option<String>,
-    /// Per-request socket timeout, in seconds.
-    pub timeout: Option<u64>,
+    /// Per-request socket timeout.
+    pub timeout: Option<Duration>,
     /// HTTP headers to set on every request made to the Esplora server.
     pub headers: HashMap<String, String>,
     /// Maximum number of retry attempts for retryable responses.
@@ -115,8 +116,8 @@ impl BlockingClient {
             request = request.with_proxy(Proxy::new_http(proxy)?);
         }
 
-        if let Some(timeout) = &self.timeout {
-            request = request.with_timeout(*timeout);
+        if let Some(timeout) = self.timeout {
+            request = request.with_timeout(duration_to_timeout_secs(timeout));
         }
 
         if !self.headers.is_empty() {

@@ -93,7 +93,6 @@
 use std::collections::HashMap;
 use std::fmt;
 use std::num::TryFromIntError;
-#[cfg(any(feature = "blocking", feature = "async"))]
 use std::time::Duration;
 
 #[cfg(feature = "async")]
@@ -171,6 +170,16 @@ fn is_retryable(response: &Response) -> bool {
     RETRYABLE_ERROR_CODES.contains(&(response.status_code as u16))
 }
 
+/// Convert a [`Duration`] to whole timeout seconds for `bitreq`.
+#[cfg(any(feature = "blocking", feature = "async"))]
+fn duration_to_timeout_secs(duration: Duration) -> u64 {
+    if duration.subsec_nanos() == 0 {
+        duration.as_secs()
+    } else {
+        duration.as_secs().saturating_add(1)
+    }
+}
+
 /// Return the [`FeeRate`] for the given confirmation target in blocks.
 ///
 /// Selects the highest confirmation target from `estimates` that is at or
@@ -201,10 +210,12 @@ pub fn sat_per_vbyte_to_feerate(estimates: HashMap<u16, f64>) -> HashMap<u16, Fe
 /// # Example
 ///
 /// ```no_run
+/// use std::time::Duration;
+///
 /// # #[cfg(feature = "blocking")]
 /// # {
 /// let client = esplora_client::Builder::new("https://mempool.space/testnet/api")
-///     .timeout(30)
+///     .timeout(Duration::from_secs(30))
 ///     .max_retries(4)
 ///     .header("user-agent", "my-wallet/0.1")
 ///     .build_blocking();
@@ -228,8 +239,8 @@ pub struct Builder {
     ///
     /// The proxy is ignored when targeting `wasm32`.
     pub proxy: Option<String>,
-    /// Per-request socket timeout, in seconds.
-    pub timeout: Option<u64>,
+    /// Per-request socket timeout.
+    pub timeout: Option<Duration>,
     /// HTTP headers to set on every request made to the Esplora server.
     pub headers: HashMap<String, String>,
     /// Maximum number of retry attempts for retryable HTTP responses.
@@ -264,8 +275,8 @@ impl Builder {
         self
     }
 
-    /// Set the per-request socket timeout, in seconds.
-    pub fn timeout(mut self, timeout: u64) -> Self {
+    /// Set the per-request socket timeout.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = Some(timeout);
         self
     }

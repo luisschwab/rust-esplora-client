@@ -9,17 +9,17 @@
 //!
 //! [Esplora API]: <https://github.com/Blockstream/esplora/blob/master/API.md>
 
-use bitcoin::hash_types;
 use serde::Deserialize;
 use std::collections::HashMap;
 
 pub use bitcoin::consensus::{deserialize, serialize};
+use bitcoin::hash_types;
 use bitcoin::hash_types::TxMerkleNode;
 pub use bitcoin::hex::FromHex;
 pub use bitcoin::{
     absolute, block, transaction, Address, Amount, Block, BlockHash, CompactTarget, FeeRate,
-    OutPoint, Script, ScriptBuf, ScriptHash, Transaction, TxIn, TxOut, Txid, Weight, Witness,
-    Wtxid,
+    OutPoint, Script, ScriptBuf, ScriptHash, Sequence, Transaction, TxIn, TxOut, Txid, Weight,
+    Witness, Wtxid,
 };
 
 /// An input to a [`Transaction`].
@@ -35,11 +35,11 @@ pub struct Vin {
     pub prevout: Option<Vout>,
     /// The [`Script`] that unlocks this input.
     pub scriptsig: ScriptBuf,
-    /// The Witness that unlocks this input.
-    #[serde(deserialize_with = "deserialize_witness", default)]
-    pub witness: Vec<Vec<u8>>,
+    /// The [`Witness`] that unlocks this input.
+    #[serde(default)]
+    pub witness: Witness,
     /// The sequence value for this input.
-    pub sequence: u32,
+    pub sequence: Sequence,
     /// Whether this is a coinbase input.
     pub is_coinbase: bool,
 }
@@ -118,11 +118,11 @@ pub struct BlockStatus {
 pub struct EsploraTx {
     /// The [`Txid`] of the [`Transaction`].
     pub txid: Txid,
-    /// The version number of the [`Transaction`].
-    pub version: i32,
+    /// The version of the [`Transaction`].
+    pub version: transaction::Version,
     /// The locktime of the [`Transaction`].
     /// Sets a time or height after which the [`Transaction`] can be mined.
-    pub locktime: u32,
+    pub locktime: absolute::LockTime,
     /// The array of inputs in the [`Transaction`].
     pub vin: Vec<Vin>,
     /// The array of outputs in the [`Transaction`].
@@ -232,8 +232,9 @@ pub struct BlockSummary {
 /// Statistics about an [`Address`].
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct AddressStats {
-    /// The [`Address`], as a [`String`].
-    pub address: String,
+    /// The [`Address`].
+    #[serde(deserialize_with = "deserialize_address_assume_checked")]
+    pub address: Address,
     /// The summary of confirmed [`Transaction`]s for this [`Address`].
     pub chain_stats: AddressTxsSummary,
     /// The summary of unconfirmed mempool [`Transaction`]s for this [`Address`].
@@ -399,8 +400,8 @@ impl EsploraTx {
     /// and reconstructs the [`Transaction`] from its inputs and outputs.
     pub fn to_tx(&self) -> Transaction {
         Transaction {
-            version: transaction::Version::non_standard(self.version),
-            lock_time: bitcoin::absolute::LockTime::from_consensus(self.locktime),
+            version: self.version,
+            lock_time: self.locktime,
             input: self
                 .vin
                 .iter()
@@ -411,8 +412,8 @@ impl EsploraTx {
                         vout: vin.vout,
                     },
                     script_sig: vin.scriptsig,
-                    sequence: bitcoin::Sequence(vin.sequence),
-                    witness: Witness::from_slice(&vin.witness),
+                    sequence: vin.sequence,
+                    witness: vin.witness,
                 })
                 .collect(),
             output: self
@@ -473,20 +474,17 @@ impl From<&EsploraTx> for Transaction {
     }
 }
 
-/// Deserializes a witness from a list of hex-encoded strings.
+/// Deserializes an [`Address`] from an Esplora address string.
 ///
-/// The Esplora API represents witness data as an array of hex strings,
-/// e.g. `["deadbeef", "cafebabe"]`. This deserializer decodes each string
-/// into raw bytes.
-fn deserialize_witness<'de, D>(d: D) -> Result<Vec<Vec<u8>>, D::Error>
+/// Esplora returns address strings without separately providing the expected
+/// network, so this deserializer parses the address and assumes the embedded
+/// network marker is correct.
+fn deserialize_address_assume_checked<'de, D>(d: D) -> Result<Address, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
-    let list = Vec::<String>::deserialize(d)?;
-    list.into_iter()
-        .map(|hex_str| Vec::<u8>::from_hex(&hex_str))
-        .collect::<Result<Vec<Vec<u8>>, _>>()
-        .map_err(serde::de::Error::custom)
+    let address = Address::<bitcoin::address::NetworkUnchecked>::deserialize(d)?;
+    Ok(address.assume_checked())
 }
 
 /// Deserializes an optional [`FeeRate`] from an `f64` BTC/kvB value.

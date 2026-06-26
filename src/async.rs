@@ -46,9 +46,9 @@ use bitcoin::{Address, Amount, Block, BlockHash, FeeRate, MerkleBlock, Script, T
 use bitreq::{Client, Method, Proxy, Request, RequestExt, Response};
 
 use crate::{
-    is_retryable, is_success, sat_per_vbyte_to_feerate, AddressStats, BlockInfo, BlockStatus,
-    Builder, Error, EsploraTx, MempoolRecentTx, MempoolStats, MerkleProof, OutputStatus,
-    ScriptHashStats, SubmitPackageResult, TxStatus, Utxo, BASE_BACKOFF_MILLIS,
+    duration_to_timeout_secs, is_retryable, is_success, sat_per_vbyte_to_feerate, AddressStats,
+    BlockInfo, BlockStatus, Builder, Error, EsploraTx, MempoolRecentTx, MempoolStats, MerkleProof,
+    OutputStatus, ScriptHashStats, SubmitPackageResult, TxStatus, Utxo, BASE_BACKOFF_MILLIS,
 };
 
 #[allow(deprecated)]
@@ -79,8 +79,8 @@ pub struct AsyncClient<S = DefaultSleeper> {
     ///
     /// NOTE: The proxy is ignored when targeting `wasm32`.
     proxy: Option<String>,
-    /// Per-request socket timeout, in seconds.
-    timeout: Option<u64>,
+    /// Per-request socket timeout.
+    timeout: Option<Duration>,
     /// HTTP headers to set on every request made to the Esplora server.
     headers: HashMap<String, String>,
     /// Maximum number of retry attempts for retryable responses.
@@ -142,8 +142,8 @@ impl<S: Sleeper> AsyncClient<S> {
         }
 
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(timeout) = &self.timeout {
-            request = request.with_timeout(*timeout);
+        if let Some(timeout) = self.timeout {
+            request = request.with_timeout(duration_to_timeout_secs(timeout));
         }
 
         if !self.headers.is_empty() {
